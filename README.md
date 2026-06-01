@@ -1,67 +1,86 @@
-# 🐾 Projet IA / Java / THS - Classification Chien vs Chat
+# 🐾 Projet IA / Java / THS - Classification Multi-Tâches (Chiens, Chats, Sauvages)
 
-Ce dépôt contient le code source de la chaîne de traitement intelligente développée dans le cadre du projet ISEN[cite: 1]. L'objectif est d'implémenter, d'entraîner et d'évaluer un neurone artificiel capable de classifier des images de chiens et de chats[cite: 1].
+Ce dépôt contient le code source de la chaîne de traitement intelligente développée dans le cadre du projet ISEN. L'architecture permet de traiter deux classifications binaires de front (Chien vs Chat et Sauvage vs Non-Sauvage) à l'aide de trois types de neurones artificiels (Heaviside, Sigmoïde, ReLU).
 
 ---
 
 ## 🛠️ Architecture du Projet
 
-Le projet s'appuie obligatoirement sur les briques logicielles fournies par l'équipe enseignante[cite: 1] :
+Le projet s'appuie obligatoirement sur les briques logicielles fournies :
+* `iNeurone.java` : Interface imposée définissant le contrat du neurone (`metAJour`, `sortie`, `apprentissage`, `sauvegarde`, `chargement`).
+* `Neurone.java` : Classe abstraite gérant la structure globale, le biais, les synapses, et l'apprentissage par descente de gradient (MSE).
+* `NeuroneHeavyside.java` : Neurone utilisant une fonction d'activation binaire par seuil.
+* `Image.java` : Classe utilitaire gérant le chargement des fichiers, l'extraction des pixels et l'encapsulation du label.
 
-*   `iNeurone.java` : Interface imposée définissant le contrat du neurone (méthodes `metAJour`, `sortie`, `apprentissage`)[cite: 2].
-*   `Neurone.java` : Classe abstraite implémentant la structure globale du neurone, la gestion des synapses, du biais, ainsi que l'algorithme d'apprentissage par descente de gradient (MSE)[cite: 3].
-*   `NeuroneHeavyside.java` : Spécialisation du neurone utilisant une fonction d'activation binaire par seuil (Heaviside)[cite: 4].
-*   `testNeurone.java` : Programme de test initial permettant de valider l'apprentissage sur des fonctions logiques (ET / OU)[cite: 5].
-*   `Image.java` : Classe utilitaire gérant la lecture des fichiers Jpeg/Png, leur labellisation automatique, et leur mise à plat sous forme de tableau de pixels[cite: 1, 6].
+---
+
+## 📐 Méthodologie d'Expérimentation (Les 6 Étapes du Professeur)
+
+Le projet progresse de manière rigoureuse à travers six jalons d'apprentissage et d'interconnexion :
+
+1.  **Heaviside - Tâche Domestique :** Entraînement sur la distinction sélective Chien (1) vs Chat (0).
+2.  **Heaviside - Tâche Sauvage :** Entraînement sur la distinction sélective Sauvage (1) vs Non-Sauvage (0).
+3.  **Transition Sigmoïde :** Répétition des étapes 1 et 2 avec la classe `NeuroneSigmoide.java`.
+4.  **Transition ReLU :** Répétition des étapes 1 et 2 avec la classe `NeuroneReLU.java`.
+5.  **Mise en Parallèle (1 couche) :** Exécution simultanée des deux meilleurs neurones spécialisés et sauvegardés (un pour Chien/Chat, un pour Sauvage) pour obtenir un double diagnostic sur une image de test.
+6.  **Extension (Architecture Hybride Connectée) :** Interconnexion des neurones en cascade (ex: couche d'entrée en ReLU pour filtrer le bruit, connectée à une couche finale en Sigmoïde pour la décision).
+
+---
+
+## ⚡ Verrous Techniques & Solutions Implémentées
+
+### 1. Sécurisation du Mélange (Shuffle)
+* **Problématique :** Risque de dissocier le tableau des entrées (images) du tableau des sorties (labels) lors du brassage aléatoire.
+* **Solution :** Le mélange (`Collections.shuffle`) s'effectue directement sur une `List<Image>` d'objets complets. Le champ `label` étant encapsulé au sein de la classe `Image`, l'association pixel-label reste totalement indissociable. L'extraction vers les tableaux de primitives `float[][]` requis par le neurone se fait exclusivement après ce brassage.
+
+### 2. Gestion séquentielle de `eta` (Vitesse d'apprentissage)
+* **Problématique :** L'attribut `eta` étant partagé globalement (`private static float eta`), modifier sa valeur impacte instantanément tous les neurones en mémoire.
+* **Solution :** Les neurones des étapes 1 à 4 sont entraînés de manière strictement **séquentielle** (les uns après les autres). Cela permet d'ajuster dynamiquement le coefficient via `fixeCoefApprentissage(nouvelEta)` pour chaque type de neurone afin de lutter contre le bruitage. Une fois l'apprentissage d'un neurone stabilisé, ses poids synaptiques et son biais sont figés sur le disque dur à l'aide de la méthode `sauvegarde()`.
+
+### 3. Inférence Optimisée sans Réapprentissage
+* Pour les étapes 5 et 6 (Mise en parallèle et cascade), le programme principal ne relance aucun apprentissage. Il instancie les structures de neurones vides et restaure instantanément leurs états entraînés grâce à la méthode `chargement()`.
 
 ---
 
 ## 👥 Répartition de l'Équipe & Tâches en Parallèle
 
-Pour optimiser le développement au sein de notre groupe de 5, les tâches sont parallélisées afin de maximiser l'efficacité collective sans créer de goulots d'étranglement[cite: 1].
-
-### 📅 Étape 1 : Fondations & Tests Unitaires (Niveau 1)
-*Objectif : Valider les briques logicielles et étendre les capacités du neurone[cite: 1].*
+### 📅 Phase A : Fondations & Pipelines (En Parallèle)
 
 | Tâche | Assignation | Description | Dépendances |
 | :--- | :--- | :--- | :--- |
-| **1.1 Analyse de l'apprentissage** | Chef de Projet | Étudier et commenter l'algorithme d'apprentissage fourni dans `Neurone.java`[cite: 1, 3]. | Aucune |
-| **1.2 Implémentation Sigmoïde** | Développeur IA 1 | Créer `NeuroneSigmoide.java` en redéfinissant la méthode `activation()` avec l'équation sigmoïde[cite: 1, 3]. | Aucune |
-| **1.3 Implémentation ReLU** | Développeur IA 2 | Créer `NeuroneReLU.java` en redéfinissant la méthode `activation()` avec l'équation ReLU[cite: 1, 3]. | Aucune |
-| **1.4 Parsing global des Images** | Développeurs Data 1 & 2 | Utiliser la méthode `listeFichiers()` de `Image.java` pour scanner récursivement les répertoires[cite: 6]. | Aucune |
+| **IA.1 - Coder la Sigmoïde** | Développeur IA 1 | Créer `NeuroneSigmoide.java` en surchargeant la fonction `activation()`. | Aucune |
+| **IA.2 - Coder le ReLU** | Développeur IA 2 | Créer `NeuroneReLU.java` en surchargeant la fonction `activation()`. | Aucune |
+| **DATA.1 - Chargement sûr** | Développeur Data 1 | Scanner le répertoire, instancier les objets `Image` et sécuriser le `Shuffle` sur la liste globale. | Aucune |
+| **DATA.2 - Normalisation** | Développeur Data 2 | Écrire le convertisseur de pixels `int` [0;255] en `float` [0.0;1.0] post-mélange. | Aucune |
 
-### 📅 Étape 2 : Pipeline de Données (Niveau 2)
-*Objectif : Transformer les images brutes en tenseurs assimilables par le neurone[cite: 1].*
-
-| Tâche | Assignation | Description | Dépendances |
-| :--- | :--- | :--- | :--- |
-| **2.1 Labellisation Dynamique** | Développeur Data 1 | Détecter automatiquement si le fichier est un chat (`0`) ou un chien (`1`) en analysant son chemin[cite: 1, 6]. | 1.4 |
-| **2.2 Algorithme de Mélange** | Développeur Data 2 | Coder le brassage aléatoire (`shuffle`) des données pour éviter le biais d'apprentissage[cite: 1]. | 2.1 |
-| **2.3 Module de Normalisation** | Développeurs Data 1 & 2 | Convertir les valeurs de pixels `int` [0;255] en `float` [0.0;1.0] pour l'alimentation du réseau[cite: 1, 6]. | 2.2 |
-
-### 📅 Étape 3 : Intégration & Évaluation (Niveau 2)
-*Objectif : Assembler la chaîne complète, entraîner le modèle et valider ses performances[cite: 1].*
+### 📅 Phase B : Entraînements séquentiels & Sauvegardes (Étapes 1 à 4)
 
 | Tâche | Assignation | Description | Dépendances |
 | :--- | :--- | :--- | :--- |
-| **3.1 Script d'Entraînement** | Chef de Projet | Injecter le bloc `float[][]` normalisé dans la méthode `apprentissage()` du neurone sélectionné[cite: 1, 3]. | Étapes 1 & 2 |
-| **3.2 Validation (Inférence)** | Développeurs IA 1 & 2 | Charger le dataset `test`, exécuter `metAJour()` et comptabiliser les prédictions correctes[cite: 1, 3]. | 3.1 |
-| **3.3 Calcul des Métriques** | Développeur Data 1 | Générer le score de précision final (Taux de réussite global)[cite: 1]. | 3.2 |
+| **B.1 - Classifs Chien/Chat** | Développeur IA 1 | Entraîner successivement Heaviside, Sigmoïde, ReLU sur les labels domestiques. Exécuter les `sauvegarde()`. | Phase A |
+| **B.2 - Classifs Sauvages** | Développeur IA 2 | Entraîner successivement Heaviside, Sigmoïde, ReLU sur les labels sauvages. Exécuter les `sauvegarde()`. | Phase A |
+| **B.3 - Suivi Métriques** | Analyste / CP | Enregistrer dans un tableur les courbes d'apprentissage, taux de succès, d'échecs et vitesse de convergence. | Phase A |
 
-### 📅 Étape 4 : Démarche Scientifique & Livrables (Niveau 3)
-*Objectif : Éprouver le système et préparer la soutenance[cite: 1].*
+### 📅 Phase C : Intégrations Complexes & Livrables (Étapes 5 & 6)
 
 | Tâche | Assignation | Description | Dépendances |
 | :--- | :--- | :--- | :--- |
-| **4.1 Tests de Robustesse** | Tout le groupe | Évaluer l'impact de la suppression du mélange, de la normalisation, ou de l'injection de bruit blanc[cite: 1]. | Étape 3 |
-| **4.2 Rapport Technique** | Chef de Projet | Rédiger le document PDF final synthétisant la démarche, les protocoles et les résultats chiffrés[cite: 1]. | 4.1 |
-| **4.3 Support de Soutenance** | Tout le groupe | Concevoir la présentation PDF (7 minutes max) mettant en avant 2 difficultés majeures résolues[cite: 1]. | 4.2 |
+| **C.1 - Parallélisation** | Développeur Data 1 & 2 | Créer le `main` de l'Étape 5 chargeant les deux meilleurs neurones spécialisés en simultané. | Phase B |
+| **C.2 - Réseau en cascade** | Développeurs IA 1 & 2 | Connecter les sorties des neurones intermédiaires (ReLU) vers un neurone décisionnel (Sigmoïde). | Phase B |
+| **C.3 - Rédaction Scientifique** | Tout le groupe / Chef de Projet | Finaliser le rapport d'expérimentation (PDF) et concevoir le support de soutenance (7 min). | C.1, C.2 |
+
+---
+
+## 📊 Critères d'Évaluation du Rapport Technique
+
+Une attention critique est portée sur l'analyse scientifique des données :
+* **Analyse comparative poussée :** Comparaison fine des taux de succès/échecs entre Heaviside, Sigmoïde et ReLU.
+* **Journal des essais :** Description transparente de toutes les configurations architecturales testées en Étape 6, incluant les échecs rencontrés (ex: saturation ou divergence) et les solutions trouvées.
 
 ---
 
 ## 🚫 Contraintes Strictes de Rendu
 
-Pénalité de 100% appliquée sur la note finale en cas de non-respect de ces règles[cite: 1] :
-1.  **Aucune bibliothèque Java externe** ne doit être ajoutée au livrable[cite: 1].
-2.  **Ne pas inclure les datasets d'images** dans l'archive finale (uniquement les fichiers sources `.java`)[cite: 1].
-3.  Respect absolu de la date limite de rendu fixée au **05/06 avant 12h00**[cite: 1].
+* **Aucune bibliothèque Java externe** tolérée.
+* **Exclusion stricte des datasets d'images** dans le livrable (uniquement les codes sources `.java`).
+* Date limite absolue : **05/06 avant 11h59**.
