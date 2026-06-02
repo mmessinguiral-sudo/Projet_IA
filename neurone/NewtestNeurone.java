@@ -1,3 +1,5 @@
+//NECESSITE TOUT LES FICHIERS DANS LE MEME DOSSIER (DONC IL FAUT DEPLACER Image.java)
+
 public class NewtestNeurone
 {
     final static float MSElimite = 0.1f;
