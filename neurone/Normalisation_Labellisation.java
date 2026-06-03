@@ -282,7 +282,7 @@ public class Normalisation_Labellisation {
         int totalImages = testData.X.length;
 
         // Seuil de confiance : le gagnant doit avoir au moins ce score pour être accepté
-        final float seuilConfiance = 0.40f;
+        final float seuilConfiance = 0.50f;
 
         for (int i = 0; i < totalImages; i++) {
             nChat.metAJour(testData.X[i]);
