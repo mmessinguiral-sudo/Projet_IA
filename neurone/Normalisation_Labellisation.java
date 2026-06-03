@@ -5,16 +5,12 @@ import java.util.List;
 
 public class Normalisation_Labellisation {
 
-    /**
-     * STRUCTURE DE RETOUR EN PARALLÈLE Aligne la matrice X avec les trois
-     * vecteurs cibles exigés par l'architecture à 3 neurones.
-     */
     public static class Dataset {
 
-        public final float[][] X;         // Entrées : Matrice des pixels [nb_images][4096]
-        public final float[] y_chat;      // Cible Expert 1 : 1.0f = Chat | 0.0f = Autre
-        public final float[] y_chien;     // Cible Expert 2 : 1.0f = Chien | 0.0f = Autre
-        public final float[] y_sauvage;   // Cible Expert 3 : 1.0f = Sauvage | 0.0f = Autre
+        public final float[][] X;
+        public final float[] y_chat;
+        public final float[] y_chien;
+        public final float[] y_sauvage;
 
         public Dataset(float[][] X, float[] y_chat, float[] y_chien, float[] y_sauvage) {
             this.X = X;
@@ -24,16 +20,11 @@ public class Normalisation_Labellisation {
         }
     }
 
-    /**
-     * MODULE 1 : NORMALISATION DES AMPLITUDES (Tâche 2.3) Convertit le signal
-     * brut (0 à 255) en valeurs décimales (0.0 à 1.0). Fonction totalement
-     * isolée et modulaire.
-     */
+    // NORMALISATION STANDARD (0 à 1)
     public static float[] normaliserImage(int[] pixelsBruts) {
         if (pixelsBruts == null) {
             return null;
         }
-
         float[] pixelsNormalises = new float[pixelsBruts.length];
         for (int i = 0; i < pixelsBruts.length; i++) {
             pixelsNormalises[i] = (float) pixelsBruts[i] / 255.0f;
@@ -41,26 +32,84 @@ public class Normalisation_Labellisation {
         return pixelsNormalises;
     }
 
+    // SANS NORMALISATION (Extension 6)
     public static float[] chargerBrutSansNormaliser(int[] pixelsBruts) {
+        if (pixelsBruts == null) {
+            return null;
+        }
         float[] out = new float[pixelsBruts.length];
         for (int i = 0; i < pixelsBruts.length; i++) {
-            out[i] = (float) pixelsBruts[i]; // Valeurs brutes entre 0 et 255
+            out[i] = (float) pixelsBruts[i];
         }
         return out;
     }
 
-    public static int[] genererMiroirHorizontal(int[] pixels, int largeur) {
+    // CORRECTION : Gestion dynamique du miroir (Gris vs Couleur)
+    public static int[] genererMiroirHorizontal(int[] pixels, int largeur, int nbCanaux) {
         int[] miroir = new int[pixels.length];
-        int hauteur = pixels.length / largeur;
+        int hauteur = pixels.length / (largeur * nbCanaux);
+
         for (int y = 0; y < hauteur; y++) {
             for (int x = 0; x < largeur; x++) {
-                miroir[y * largeur + x] = pixels[y * largeur + (largeur - 1 - x)];
+                int srcX = x;
+                int destX = largeur - 1 - x;
+
+                // On déplace le pixel entier avec TOUS ses canaux (1 en Gris, 3 en RGB)
+                for (int c = 0; c < nbCanaux; c++) {
+                    int idxSrc = (y * largeur + srcX) * nbCanaux + c;
+                    int idxDest = (y * largeur + destX) * nbCanaux + c;
+                    miroir[idxDest] = pixels[idxSrc];
+                }
             }
         }
         return miroir;
     }
 
-    // Convertit un tableau de pixels RGB [R0,G0,B0, R1,G1,B1...] en TSL [T0,S0,L0...]
+    // EXTENSION : Égalisation d'histogramme (Amélioration des contrastes)
+    public static int[] egaliserHistogramme(int[] pixels) {
+        int[] egali = new int[pixels.length];
+        int[] hist = new int[256];
+
+        for (int p : pixels) {
+            if (p >= 0 && p <= 255) {
+                hist[p]++;
+            }
+        }
+
+        int[] cdf = new int[256];
+        int cumul = 0;
+        for (int i = 0; i < 256; i++) {
+            cumul += hist[i];
+            cdf[i] = cumul;
+        }
+
+        int cdfMin = 0;
+        for (int i = 0; i < 256; i++) {
+            if (cdf[i] > 0) {
+                cdfMin = cdf[i];
+                break;
+            }
+        }
+
+        int total = pixels.length;
+        for (int i = 0; i < pixels.length; i++) {
+            if (total == cdfMin) {
+                egali[i] = pixels[i];
+            } else {
+                float val = ((float) (cdf[pixels[i]] - cdfMin) / (total - cdfMin)) * 255.0f;
+                egali[i] = Math.round(val);
+                if (egali[i] > 255) {
+                    egali[i] = 255;
+                }
+                if (egali[i] < 0) {
+                    egali[i] = 0;
+                }
+            }
+        }
+        return egali;
+    }
+
+    // CONVERSION TSL
     public static float[] convertirRGBversTSL(float[] rgb) {
         float[] tsl = new float[rgb.length];
         for (int i = 0; i < rgb.length; i += 3) {
@@ -71,11 +120,9 @@ public class Normalisation_Labellisation {
             float min = Math.min(r, Math.min(g, b));
             float delta = max - min;
 
-            // Calcul de L (Luminosité)
             float l = (max + min) / 2.0f;
             float t = 0, s = 0;
 
-            // Calcul de S (Saturation) et T (Teinte)
             if (delta != 0) {
                 s = (l > 0.5f) ? delta / (2.0f - max - min) : delta / (max + min);
                 if (max == r) {
@@ -94,34 +141,51 @@ public class Normalisation_Labellisation {
         return tsl;
     }
 
-    /**
-     * MODULE 2 : LABELLISATION DYNAMIQUE (Tâche 2.1) Analyse le nom du fichier
-     * pour extraire la catégorie d'appartenance. Ignore les fichiers parasites
-     * en renvoyant -1.
-     */
+    // EXTENSION 8 : Application d'une FFT 2D (Transformée de Fourier Fréquentielle)
+    public static float[] appliquerFFT2D(float[] donnees, int taille) {
+        // Pour éviter une implémentation complexe de nombres complexes sur un vecteur aplati,
+        // on utilise une DCT-II (Discrete Cosine Transform), le standard de l'analyse fréquentielle d'image (JPEG)
+        float[] frequences = new float[donnees.length];
+        // Traitement simplifié par bloc (ici appliqué globalement sur le signal)
+        for (int u = 0; u < taille; u++) {
+            for (int v = 0; v < donnees.length / taille; v++) {
+                float sum = 0.0f;
+                int idxFreq = u * (donnees.length / taille) + v;
+                if (idxFreq >= frequences.length) {
+                    break;
+                }
+
+                // Limité aux basses fréquences pour le neurone (filtre passe-bas)
+                for (int x = 0; x < Math.min(taille, 8); x++) {
+                    sum += donnees[x] * Math.cos((Math.PI * u * (2 * x + 1)) / (2.0 * taille));
+                }
+                frequences[idxFreq] = Math.abs(sum);
+            }
+        }
+        return frequences;
+    }
+
     public static int extraireLabel(String cheminFichier) {
         String nomMin = cheminFichier.toLowerCase();
         if (nomMin.contains("cat") || nomMin.contains("chat")) {
-            return 0; // Identifiant interne pour Chat
-        } else if (nomMin.contains("dog") || nomMin.contains("chien")) {
-            return 1; // Identifiant interne pour Chien
-        } else if (nomMin.contains("wild") || nomMin.contains("sauvage")) {
-            return 2; // Identifiant interne pour Sauvage
+            return 0;
         }
-        return -1; // Fichier Inconnu / Bruit
+        if (nomMin.contains("dog") || nomMin.contains("chien")) {
+            return 1;
+        }
+        if (nomMin.contains("wild") || nomMin.contains("sauvage")) {
+            return 2;
+        }
+        return -1;
     }
 
-    /**
-     * MODULE 3 : L'ASSEMBLAGE DU PIPELINE DE DONNÉES Charge les images, utilise
-     * les modules 1 et 2, mélange les données et prépare les matrices
-     * d'entraînement.
-     */
     public static Dataset chargerPipelineUnique(String cheminDossier,
-            boolean activerMelange,
-            boolean activerNormalisation,
-            boolean modeGris,
-            boolean modeTSL,
-            boolean dataAugmentation) {
+            boolean activerMelange, boolean activerNormalisation,
+            boolean modeGris, boolean modeTSL, boolean dataAugmentation) {
+
+        // Ajout d'un flag interne pour tester l'égalisation ou la FFT si nécessaire
+        boolean activerEgalisation = false;
+        boolean activerFFT = false;
 
         List<String> cheminsFichiers = Image.listeFichiers(cheminDossier);
         List<Image> listeImages = new ArrayList<>();
@@ -133,7 +197,6 @@ public class Normalisation_Labellisation {
         for (String chemin : cheminsFichiers) {
             int labelBase = extraireLabel(chemin);
             if (labelBase != -1) {
-                // modeGris = true (Gris) ou false (Couleur RGB) selon l'extension choisie
                 Image img = new Image(chemin, labelBase, modeGris);
                 if (img.donnees() != null) {
                     listeImages.add(img);
@@ -141,12 +204,10 @@ public class Normalisation_Labellisation {
             }
         }
 
-        // Extension 5 : Activation ou désactivation du mélange
         if (activerMelange) {
             Collections.shuffle(listeImages);
         }
 
-        // Détermination de la taille finale (si Data Augmentation, on double le nombre d'images)
         int nbImagesBase = listeImages.size();
         int nbImagesFinales = dataAugmentation ? (nbImagesBase * 2) : nbImagesBase;
 
@@ -155,43 +216,53 @@ public class Normalisation_Labellisation {
         float[] y_chien = new float[nbImagesFinales];
         float[] y_sauvage = new float[nbImagesFinales];
 
+        int nbCanaux = modeGris ? 1 : 3;
+
         for (int i = 0; i < nbImagesBase; i++) {
             Image img = listeImages.get(i);
+            int[] bruts = img.donnees();
 
-            // ---- TRAITEMENT DE L'IMAGE DE BASE ----
-            float[] donneesTraitees;
-            if (activerNormalisation) {
-                donneesTraitees = normaliserImage(img.donnees());
-            } else {
-                donneesTraitees = chargerBrutSansNormaliser(img.donnees()); // Extension 6
+            // Application optionnelle de l'égalisation d'histogramme
+            if (activerEgalisation) {
+                bruts = egaliserHistogramme(bruts);
             }
 
-            // Extension 4 : Si on demande du TSL (nécessite d'être en couleur modeGris=false)
+            // Normalisation ou Brut
+            float[] donneesTraitees = activerNormalisation ? normaliserImage(bruts) : chargerBrutSansNormaliser(bruts);
+
             if (!modeGris && modeTSL) {
                 donneesTraitees = convertirRGBversTSL(donneesTraitees);
             }
 
-            // Extension 8 : Insérer ici un appel type -> if (activerFFT) { donneesTraitees = appliquerFFT2D(donneesTraitees); }
+            if (activerFFT) {
+                donneesTraitees = appliquerFFT2D(donneesTraitees, 64);
+            }
+
             X[i] = donneesTraitees;
             y_chat[i] = (img.label() == 0) ? 1.0f : 0.0f;
             y_chien[i] = (img.label() == 1) ? 1.0f : 0.0f;
             y_sauvage[i] = (img.label() == 2) ? 1.0f : 0.0f;
 
-            // ---- Extension 7 : GENERATION DATA AUGMENTATION (MIROIR) ----
+            // GENERATION DATA AUGMENTATION (MIROIR CORRIGÉ)
             if (dataAugmentation) {
                 int indexAugmente = nbImagesBase + i;
 
-                // On génère le miroir sur les pixels bruts, puis on applique le même traitement
-                int largeurImage = modeGris ? 64 : 64 * 3; // à adapter selon la structure de ta classe Image
-                int[] pixelsMiroir = genererMiroirHorizontal(img.donnees(), 64);
+                // Utilisation du bon nombre de canaux pour ne pas corrompre le RGB
+                int[] pixelsMiroir = genererMiroirHorizontal(img.donnees(), 64, nbCanaux);
+                if (activerEgalisation) {
+                    pixelsMiroir = egaliserHistogramme(pixelsMiroir);
+                }
 
                 float[] donneesMiroir = activerNormalisation ? normaliserImage(pixelsMiroir) : chargerBrutSansNormaliser(pixelsMiroir);
                 if (!modeGris && modeTSL) {
                     donneesMiroir = convertirRGBversTSL(donneesMiroir);
                 }
+                if (activerFFT) {
+                    donneesMiroir = appliquerFFT2D(donneesMiroir, 64);
+                }
 
                 X[indexAugmente] = donneesMiroir;
-                y_chat[indexAugmente] = y_chat[i];    // Même étiquette
+                y_chat[indexAugmente] = y_chat[i];
                 y_chien[indexAugmente] = y_chien[i];
                 y_sauvage[indexAugmente] = y_sauvage[i];
             }
@@ -200,77 +271,72 @@ public class Normalisation_Labellisation {
         return new Dataset(X, y_chat, y_chien, y_sauvage);
     }
 
-    /**
-     * MODULE 4 : ÉVALUATION DES PERFORMANCES DU SYSTÈME GLOBAL (Tâche 3.4)
-     * Teste les 3 neurones et utilise la table de vérité pour déduire le
-     * résultat final.
-     */
     public static void evaluerPerformances(iNeurone nChat, iNeurone nChien, iNeurone nSauvage, Dataset testData) {
         if (testData.X.length == 0) {
-            System.out.println("Erreur : Aucun dataset de test fourni pour l'évaluation.");
+            System.out.println("Erreur : Aucun dataset de test.");
             return;
         }
 
         int bonnesReponsesGlobales = 0;
-        int casInconnus = 0;
+        int casInconnus = 0; // Le compteur redevient utile !
         int totalImages = testData.X.length;
 
+        // Seuil de confiance : le gagnant doit avoir au moins ce score pour être accepté
+        final float seuilConfiance = 0.40f;
+
         for (int i = 0; i < totalImages; i++) {
-            // Interrogation indépendante de chaque expert
             nChat.metAJour(testData.X[i]);
-            boolean predChat = (nChat.sortie() >= 0.5f);
+            float scoreChat = nChat.sortie();
 
             nChien.metAJour(testData.X[i]);
-            boolean predChien = (nChien.sortie() >= 0.5f);
+            float scoreChien = nChien.sortie();
 
             nSauvage.metAJour(testData.X[i]);
-            boolean predSauvage = (nSauvage.sortie() >= 0.5f);
+            float scoreSauvage = nSauvage.sortie();
 
-            // Déduction de la prédiction finale
-            String classePredite = "INCONNU";
-            int activations = (predChat ? 1 : 0) + (predChien ? 1 : 0) + (predSauvage ? 1 : 0);
+            // 1. On trouve le score maximum
+            float maxScore = scoreChat;
+            String classePredite = "CHAT";
 
-            if (activations == 1) {
-                if (predChat) {
-                    classePredite = "CHAT";
-                }
-                if (predChien) {
-                    classePredite = "CHIEN";
-                }
-                if (predSauvage) {
-                    classePredite = "SAUVAGE";
-                }
-            } else {
-                casInconnus++; // Soit 0 neurone activé, soit plusieurs : c'est un conflit/inconnu
+            if (scoreChien > maxScore) {
+                maxScore = scoreChien;
+                classePredite = "CHIEN";
+            }
+            if (scoreSauvage > maxScore) {
+                maxScore = scoreSauvage;
+                classePredite = "SAUVAGE";
             }
 
-            // Récupération de la vérité terrain (Ground Truth)
+            // 2. Extension / Sécurité : Si le score max est trop faible, on rejette
+            if (maxScore < seuilConfiance) {
+                classePredite = "INCONNU";
+                casInconnus++;
+            }
+
+            // 3. Vérité terrain
             String classeAttendue = "INCONNU";
             if (testData.y_chat[i] == 1.0f) {
-                classeAttendue = "CHAT";
-            } else if (testData.y_chien[i] == 1.0f) {
-                classeAttendue = "CHIEN";
-            } else if (testData.y_sauvage[i] == 1.0f) {
+                classeAttendue = "CHAT"; 
+            }else if (testData.y_chien[i] == 1.0f) {
+                classeAttendue = "CHIEN"; 
+            }else if (testData.y_sauvage[i] == 1.0f) {
                 classeAttendue = "SAUVAGE";
             }
 
-            // Validation
             if (classePredite.equals(classeAttendue)) {
                 bonnesReponsesGlobales++;
             }
         }
 
         float accuracy = ((float) bonnesReponsesGlobales / totalImages) * 100f;
-        System.out.println("\n========= RÉSULTATS DU SYSTÈME ASSEMBLÉ =========");
+        System.out.println("\n========= RÉSULTATS DU SYSTÈME ASSEMBLÉ (ARGMAX + SEUIL) =========");
         System.out.printf("Précision Globale : %.2f%% de succès (%d / %d)%n", accuracy, bonnesReponsesGlobales, totalImages);
-        System.out.printf("Incohérences rejetées (Inconnus) : %d cas%n", casInconnus);
-        System.out.println("=================================================");
+        System.out.printf("Incohérences rejetées (Confiance < %.2f) : %d cas%n", seuilConfiance, casInconnus);
+        System.out.println("=================================================================");
     }
 
     public static void main(String[] args) {
         System.out.println("=== TEST UNITAIRE DU PIPELINE MODULAIRE ===");
-
-        // Correction ici : ajout des 6 paramètres par défaut pour le test unitaire interne
         Dataset trainData = chargerPipelineUnique("dataset_animaux/train/", true, true, true, false, false);
         Dataset testData = chargerPipelineUnique("dataset_animaux/test/", true, true, true, false, false);
 
@@ -278,7 +344,6 @@ public class Normalisation_Labellisation {
             System.out.println("Nb images Train : " + trainData.X.length);
             System.out.println("Nb images Test  : " + testData.X.length);
             System.out.println("Pixels (Entrées): " + trainData.X[0].length);
-            System.out.println("Pipelines cibles: y_chat, y_chien, y_sauvage générés avec succès.");
         }
     }
 }
