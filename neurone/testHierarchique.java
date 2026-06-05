@@ -4,7 +4,8 @@ public class testHierarchique {
     final static float SEUIL_INCONNU = 0.50f; 
 
     public static void main(String[] args) {
-       
+
+        //Paramètre des images
         boolean activerNormalisation = true;  
         boolean modeGris             = false; 
         boolean modeTSL              = true; 
