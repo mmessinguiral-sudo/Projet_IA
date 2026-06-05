@@ -1,16 +1,16 @@
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 public class Normalisation_Labellisation {
 
+    // Structure pivot pour regrouper les données d'entrée (X) et les cibles binaires (y)
     public static class Dataset {
 
-        public final float[][] X;
-        public final float[] y_chat;
-        public final float[] y_chien;
-        public final float[] y_sauvage;
+        public final float[][] X;         // Matrice des images aplaties (lignes = images, cols = pixels/frequences)
+        public final float[] y_chat;      // Vecteur cible pour le neurone expert Chat
+        public final float[] y_chien;     // Vecteur cible pour le neurone expert Chien
+        public final float[] y_sauvage;   // Vecteur cible pour le neurone expert Sauvage
 
         public Dataset(float[][] X, float[] y_chat, float[] y_chien, float[] y_sauvage) {
             this.X = X;
@@ -20,41 +20,41 @@ public class Normalisation_Labellisation {
         }
     }
 
-    // NORMALISATION STANDARD (0 à 1)
+    // Réduction de la dynamique des pixels (0-255) vers une plage continue entre 0.0 et 1.0
     public static float[] normaliserImage(int[] pixelsBruts) {
         if (pixelsBruts == null) {
             return null;
         }
         float[] pixelsNormalises = new float[pixelsBruts.length];
         for (int i = 0; i < pixelsBruts.length; i++) {
-            pixelsNormalises[i] = (float) pixelsBruts[i] / 255.0f;
+            pixelsNormalises[i] = (float) pixelsBruts[i] / 255.0f; // Cast explicite pour la précision
         }
         return pixelsNormalises;
     }
 
-    // SANS NORMALISATION (Extension 6)
+    // Groupe de contrôle pour comparer l'apprentissage avec et sans mise à l'échelle (Extension 6)
     public static float[] chargerBrutSansNormaliser(int[] pixelsBruts) {
         if (pixelsBruts == null) {
             return null;
         }
         float[] out = new float[pixelsBruts.length];
         for (int i = 0; i < pixelsBruts.length; i++) {
-            out[i] = (float) pixelsBruts[i];
+            out[i] = (float) pixelsBruts[i]; // Simple conversion de type sans division
         }
         return out;
     }
 
-    // CORRECTION : Gestion dynamique du miroir (Gris vs Couleur)
+    // Algorithme de retournement horizontal adapté à l'agencement des canaux (Gris ou RGB/TSL)
     public static int[] genererMiroirHorizontal(int[] pixels, int largeur, int nbCanaux) {
         int[] miroir = new int[pixels.length];
-        int hauteur = pixels.length / (largeur * nbCanaux);
+        int hauteur = pixels.length / (largeur * nbCanaux); // Déduction de la hauteur selon le format
 
         for (int y = 0; y < hauteur; y++) {
             for (int x = 0; x < largeur; x++) {
                 int srcX = x;
-                int destX = largeur - 1 - x;
+                int destX = largeur - 1 - x; // Inversion de l'indice sur l'axe horizontal
 
-                // On déplace le pixel entier avec TOUS ses canaux (1 en Gris, 3 en RGB)
+                // Boucle imbriquée indispensable pour déplacer le bloc de sous-pixels (R, G, B) ensemble
                 for (int c = 0; c < nbCanaux; c++) {
                     int idxSrc = (y * largeur + srcX) * nbCanaux + c;
                     int idxDest = (y * largeur + destX) * nbCanaux + c;
@@ -65,17 +65,19 @@ public class Normalisation_Labellisation {
         return miroir;
     }
 
-    // EXTENSION : Égalisation d'histogramme (Amélioration des contrastes)
+    // Rééquilibrage de la dynamique de l'image par étalement de l'histogramme cumulé
     public static int[] egaliserHistogramme(int[] pixels) {
         int[] egali = new int[pixels.length];
         int[] hist = new int[256];
 
+        // 1. Calcul des fréquences d'apparition de chaque niveau de gris
         for (int p : pixels) {
             if (p >= 0 && p <= 255) {
                 hist[p]++;
             }
         }
 
+        // 2. Construction de la fonction de répartition (CDF cumulée)
         int[] cdf = new int[256];
         int cumul = 0;
         for (int i = 0; i < 256; i++) {
@@ -83,6 +85,7 @@ public class Normalisation_Labellisation {
             cdf[i] = cumul;
         }
 
+        // 3. Identification de la première valeur non nulle pour le décalage de la formule
         int cdfMin = 0;
         for (int i = 0; i < 256; i++) {
             if (cdf[i] > 0) {
@@ -91,6 +94,7 @@ public class Normalisation_Labellisation {
             }
         }
 
+        // 4. Mappage des nouvelles intensités et gestion des cas limites
         int total = pixels.length;
         for (int i = 0; i < pixels.length; i++) {
             if (total == cdfMin) {
@@ -98,33 +102,35 @@ public class Normalisation_Labellisation {
             } else {
                 float val = ((float) (cdf[pixels[i]] - cdfMin) / (total - cdfMin)) * 255.0f;
                 egali[i] = Math.round(val);
-                if (egali[i] > 255) {
-                    egali[i] = 255;
-                }
-                if (egali[i] < 0) {
-                    egali[i] = 0;
-                }
+                
+                // Sécurités anti-débordement
+                if (egali[i] > 255) egali[i] = 255;
+                if (egali[i] < 0) egali[i] = 0;
             }
         }
         return egali;
     }
 
-    // CONVERSION TSL
+    // Passage de l'espace colorimétrique non linéaire RGB vers la représentation Teinte, Saturation, Luminosité
     public static float[] convertirRGBversTSL(float[] rgb) {
         float[] tsl = new float[rgb.length];
-        for (int i = 0; i < rgb.length; i += 3) {
+        for (int i = 0; i < rgb.length; i += 3) { // Saut de 3 en 3 pour traiter chaque triplet de pixels
             float r = rgb[i];
             float g = rgb[i + 1];
             float b = rgb[i + 2];
+            
             float max = Math.max(r, Math.max(g, b));
             float min = Math.min(r, Math.min(g, b));
             float delta = max - min;
 
-            float l = (max + min) / 2.0f;
+            float l = (max + min) / 2.0f; // Calcul de la Luminosité
             float t = 0, s = 0;
 
             if (delta != 0) {
+                // Calcul de la Saturation selon la valeur de la Luminosité
                 s = (l > 0.5f) ? delta / (2.0f - max - min) : delta / (max + min);
+                
+                // Calcul de la Teinte (positionnement angulaire sur le cercle chromatique)
                 if (max == r) {
                     t = (g - b) / delta + (g < b ? 6 : 0);
                 } else if (max == g) {
@@ -132,7 +138,7 @@ public class Normalisation_Labellisation {
                 } else if (max == b) {
                     t = (r - g) / delta + 4;
                 }
-                t /= 6.0f;
+                t /= 6.0f; // Normalisation entre 0 et 1
             }
             tsl[i] = t;
             tsl[i + 1] = s;
@@ -141,12 +147,11 @@ public class Normalisation_Labellisation {
         return tsl;
     }
 
-    // EXTENSION 8 : Application d'une FFT 2D (Transformée de Fourier Fréquentielle)
+    // Analyse fréquentielle : Remplacement de la FFT par une DCT-II (plus adaptée aux signaux réels d'images)
     public static float[] appliquerFFT2D(float[] donnees, int taille) {
-        // Pour éviter une implémentation complexe de nombres complexes sur un vecteur aplati,
-        // on utilise une DCT-II (Discrete Cosine Transform), le standard de l'analyse fréquentielle d'image (JPEG)
         float[] frequences = new float[donnees.length];
-        // Traitement simplifié par bloc (ici appliqué globalement sur le signal)
+        
+        // Double boucle sur l'espace des fréquences (u, v)
         for (int u = 0; u < taille; u++) {
             for (int v = 0; v < donnees.length / taille; v++) {
                 float sum = 0.0f;
@@ -155,18 +160,19 @@ public class Normalisation_Labellisation {
                     break;
                 }
 
-                // Limité aux basses fréquences pour le neurone (filtre passe-bas)
+                // Filtre Passe-Bas strict : On s'arrête volontairement à 8 pour ne capter que les structures globales
                 for (int x = 0; x < Math.min(taille, 8); x++) {
                     sum += donnees[x] * Math.cos((Math.PI * u * (2 * x + 1)) / (2.0 * taille));
                 }
-                frequences[idxFreq] = Math.abs(sum);
+                frequences[idxFreq] = Math.abs(sum); // Extraction du module
             }
         }
         return frequences;
     }
 
+    // Extraction sémantique bilingue basé sur l'arborescence ou le nom de fichier
     public static int extraireLabel(String cheminFichier) {
-        String nomMin = cheminFichier.toLowerCase();
+        String nomMin = cheminFichier.toLowerCase(); // Neutralisation de la casse
         if (nomMin.contains("cat") || nomMin.contains("chat")) {
             return 0;
         }
@@ -176,14 +182,15 @@ public class Normalisation_Labellisation {
         if (nomMin.contains("wild") || nomMin.contains("sauvage")) {
             return 2;
         }
-        return -1;
+        return -1; // Flag d'exclusion si le fichier ne correspond à aucune classe cible
     }
 
+    // Point d'entrée unique de traitement de données (Data Pipeline modulaire)
     public static Dataset chargerPipelineUnique(String cheminDossier,
             boolean activerMelange, boolean activerNormalisation,
             boolean modeGris, boolean modeTSL, boolean dataAugmentation) {
 
-        // Ajout d'un flag interne pour tester l'égalisation ou la FFT si nécessaire
+        // Interrupteurs internes dédiés aux tests de l'égalisation et de l'analyse fréquentielle
         boolean activerEgalisation = false;
         boolean activerFFT = false;
 
@@ -194,6 +201,7 @@ public class Normalisation_Labellisation {
             return new Dataset(new float[0][0], new float[0], new float[0], new float[0]);
         }
 
+        // Phase 1 : Lecture brute et filtrage des fichiers non valides
         for (String chemin : cheminsFichiers) {
             int labelBase = extraireLabel(chemin);
             if (labelBase != -1) {
@@ -204,10 +212,12 @@ public class Normalisation_Labellisation {
             }
         }
 
+        // Phase 2 : Suppression du biais d'ordre séquentiel (mélange aléatoire du dataset)
         if (activerMelange) {
             Collections.shuffle(listeImages);
         }
 
+        // Phase 3 : Allocation dynamique des structures de stockage (doublement si augmentation active)
         int nbImagesBase = listeImages.size();
         int nbImagesFinales = dataAugmentation ? (nbImagesBase * 2) : nbImagesBase;
 
@@ -218,16 +228,15 @@ public class Normalisation_Labellisation {
 
         int nbCanaux = modeGris ? 1 : 3;
 
+        // Phase 4 : Traitement séquentiel et encodage des cibles (One-vs-Rest)
         for (int i = 0; i < nbImagesBase; i++) {
             Image img = listeImages.get(i);
             int[] bruts = img.donnees();
 
-            // Application optionnelle de l'égalisation d'histogramme
             if (activerEgalisation) {
                 bruts = egaliserHistogramme(bruts);
             }
 
-            // Normalisation ou Brut
             float[] donneesTraitees = activerNormalisation ? normaliserImage(bruts) : chargerBrutSansNormaliser(bruts);
 
             if (!modeGris && modeTSL) {
@@ -239,15 +248,16 @@ public class Normalisation_Labellisation {
             }
 
             X[i] = donneesTraitees;
+            
+            // Assignation des étiquettes binaires pour l'architecture multi-expert
             y_chat[i] = (img.label() == 0) ? 1.0f : 0.0f;
             y_chien[i] = (img.label() == 1) ? 1.0f : 0.0f;
             y_sauvage[i] = (img.label() == 2) ? 1.0f : 0.0f;
 
-            // GENERATION DATA AUGMENTATION (MIROIR CORRIGÉ)
+            // Phase 5 : Génération des variantes géométriques (Miroir) si option cochée
             if (dataAugmentation) {
                 int indexAugmente = nbImagesBase + i;
 
-                // Utilisation du bon nombre de canaux pour ne pas corrompre le RGB
                 int[] pixelsMiroir = genererMiroirHorizontal(img.donnees(), 64, nbCanaux);
                 if (activerEgalisation) {
                     pixelsMiroir = egaliserHistogramme(pixelsMiroir);
@@ -271,6 +281,7 @@ public class Normalisation_Labellisation {
         return new Dataset(X, y_chat, y_chien, y_sauvage);
     }
 
+    // Évaluation finale du système combiné via une logique de sélection ArgMax et de filtrage par seuil
     public static void evaluerPerformances(iNeurone nChat, iNeurone nChien, iNeurone nSauvage, Dataset testData) {
         if (testData.X.length == 0) {
             System.out.println("Erreur : Aucun dataset de test.");
@@ -278,13 +289,14 @@ public class Normalisation_Labellisation {
         }
 
         int bonnesReponsesGlobales = 0;
-        int casInconnus = 0; // Le compteur redevient utile !
+        int casInconnus = 0;
         int totalImages = testData.X.length;
 
-        // Seuil de confiance : le gagnant doit avoir au moins ce score pour être accepté
+        // Limite en deçà de laquelle l'activation d'un expert est considérée comme un doute
         final float seuilConfiance = 0.50f;
 
         for (int i = 0; i < totalImages; i++) {
+            // Collecte des prédictions continues des trois modèles
             nChat.metAJour(testData.X[i]);
             float scoreChat = nChat.sortie();
 
@@ -294,7 +306,7 @@ public class Normalisation_Labellisation {
             nSauvage.metAJour(testData.X[i]);
             float scoreSauvage = nSauvage.sortie();
 
-            // 1. On trouve le score maximum
+            // 1. Recherche du modèle dominant (ArgMax classique)
             float maxScore = scoreChat;
             String classePredite = "CHAT";
 
@@ -307,22 +319,23 @@ public class Normalisation_Labellisation {
                 classePredite = "SAUVAGE";
             }
 
-            // 2. Extension / Sécurité : Si le score max est trop faible, on rejette
+            // 2. Traitement du rejet si le niveau de certitude est insuffisant
             if (maxScore < seuilConfiance) {
                 classePredite = "INCONNU";
                 casInconnus++;
             }
 
-            // 3. Vérité terrain
+            // 3. Décodage du vecteur d'étiquettes pour retrouver la vraie classe d'origine
             String classeAttendue = "INCONNU";
             if (testData.y_chat[i] == 1.0f) {
                 classeAttendue = "CHAT"; 
-            }else if (testData.y_chien[i] == 1.0f) {
+            } else if (testData.y_chien[i] == 1.0f) {
                 classeAttendue = "CHIEN"; 
-            }else if (testData.y_sauvage[i] == 1.0f) {
+            } else if (testData.y_sauvage[i] == 1.0f) {
                 classeAttendue = "SAUVAGE";
             }
 
+            // Confrontation de la prédiction globale avec la réalité terrain
             if (classePredite.equals(classeAttendue)) {
                 bonnesReponsesGlobales++;
             }
