@@ -1,3 +1,5 @@
+//Classe pour gérer que plusieurs neurones recoivent la meme image
+
 public class Reseau {
     
     private final iNeurone[] neurones;
