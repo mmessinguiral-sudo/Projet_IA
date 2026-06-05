@@ -1,17 +1,17 @@
 public class testReseau {
 
+    // Point d'accès vers le sous-ensemble de validation
     final static String dossierTest = "Projet_IA-main/dataset_animaux/test/";
 
     public static void main(String[] args) {
         
-        //Paramètres des images
+        // Configuration du pipeline d'entrée (prétraitement des matrices d'images)
         boolean activerNormalisation = true;  
         boolean modeGris             = false; 
-        boolean modeTSL              = true; 
+        boolean modeTSL              = true;  
 
         System.out.println(" PHASE DE PRODUCTION : RÉSEAU MULTI-CLASSES");
 
-        //Chargement des test
         System.out.println("Lecture du dossier de Test...");
         Normalisation_Labellisation.Dataset testData = Normalisation_Labellisation.chargerPipelineUnique(
                 dossierTest, false, activerNormalisation, modeGris, modeTSL, false);
@@ -20,6 +20,8 @@ public class testReseau {
             System.err.println("Aucune image trouvée. Vérifie le chemin du dossier !");
             return;
         }
+        
+        // Dimensionnement du vecteur d'entrée selon le format des données chargées
         final int tailleImage = testData.X[0].length;
 
         System.out.println("Création et chargement des 3 neurones");
@@ -27,13 +29,13 @@ public class testReseau {
         final iNeurone neuroneChien = new NeuroneSigmoide(tailleImage);
         final iNeurone neuroneSauvage = new NeuroneSigmoide(tailleImage);
         
-        //Chargement des données déjà entrainé
+        // Restauration des vecteurs de poids pré-entraînés (persistance d'état)
         neuroneChat.chargement("poids_chat_sigmoide.txt");
         neuroneChien.chargement("poids_chien_sigmoide.txt");
         neuroneSauvage.chargement("poids_sauvage_sigmoide.txt");
 
         System.out.println("Mise en réseau parallèle...");
-        // Assemblage des experts dans iNeurone au global
+        // Encapsulation des classifieurs binaires au sein d'une topologie multi-expert
         iNeurone[] equipe = {neuroneChat, neuroneChien, neuroneSauvage};
         Reseau monReseau = new Reseau(equipe);
 
@@ -42,14 +44,16 @@ public class testReseau {
         int succesTotal = 0;
         int totalImages = testData.X.length;
 
+        // Phase d'inférence globale sur l'ensemble de test
         for (int i = 0; i < totalImages; i++) {
             
-            //On envoie au 3 neurone en meme temps
+            // Évaluation simultanée du pattern par les trois experts
             float[] reponses = monReseau.evaluerImage(testData.X[i]);
             
+            // Calcul de la classe dominante (Logique ArgMax)
             int indexGagnant = 0;
             float confianceMax = reponses[0];
-            // Parcours des probabilités pour trouver le score le plus élevé
+            
             for (int j = 1; j < reponses.length; j++) {
                 if (reponses[j] > confianceMax) {
                     confianceMax = reponses[j];
@@ -59,16 +63,18 @@ public class testReseau {
 
             int indexVraiLabel = -1;
 
-            //Label originaux des images
+            // Décodage de la vérité terrain (One-Hot-Encoding inverse)
             if (testData.y_chat[i] == 1.0f) indexVraiLabel = 0;
             else if (testData.y_chien[i] == 1.0f) indexVraiLabel = 1;
             else if (testData.y_sauvage[i] == 1.0f) indexVraiLabel = 2;
 
+            // Confrontation du modèle face à la cible
             if (indexGagnant == indexVraiLabel) {
                 succesTotal++;
             }
         }
 
+        // Calcul des métriques de performance globales
         float precisionGlobale = ((float) succesTotal / totalImages) * 100f;
         
         System.out.println("BILAN DU RESEAU");
