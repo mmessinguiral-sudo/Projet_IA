@@ -32,9 +32,7 @@ public class TestFFT {
         System.out.println("\n=== Fin du test avance ===");
     }
 
-    /**
-     * Calcule et affiche les 8x8 premières fréquences sous forme de matrice
-     */
+    //Calcule et affiche les 8x8 premières fréquences sous forme de matrice
     public static void afficherMatriceFrequences(float[] image, int taille) {
         float[] resultats = Normalisation_Labellisation.appliquerFFT2D(image, taille);
         
