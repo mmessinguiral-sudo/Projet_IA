@@ -1,5 +1,3 @@
-//NECESSITE TOUT LES FICHIERS DANS LE MEME DOSSIER (DONC IL FAUT DEPLACER Image.java)
-
 public class NewtestNeurone {
  
     final static float MSElimite = 0.1f;
@@ -8,20 +6,17 @@ public class NewtestNeurone {
  
     public static void main(String[] args) {
        
-        // =========================================================================
-        // CONFIGURATION DES EXTENSIONS (Modifie les true/false pour faire tes tests)
-        // =========================================================================
         boolean activerMelange       = true;  // false = Test Extension 5 (Sans mélange)
         boolean activerNormalisation = true;  // false = Test Extension 6 (Sans normalisation)
         boolean modeGris             = false;  // false = Test Extension 3 (Mode Couleur RGB)
         boolean modeTSL              = true; // true  = Test Extension 4 (Couleur TSL - nécessite modeGris = false)
         boolean dataAugmentation     = true; // true  = Test Extension 7 (Augmentation Miroir)
  
-        System.out.println("=== CONFIGURATION DU PIPELINE DATA ===");
+        System.out.println(" CONFIGURATION DU PIPELINE DATA ");
         System.out.printf("Mélange: %b | Normalisation: %b | Mode Gris: %b | Mode TSL: %b | Augmentation: %b\n\n",
                 activerMelange, activerNormalisation, modeGris, modeTSL, dataAugmentation);
- 
-        // 1. Chargement des données avec les paramètres d'extensions choisis
+        
+        //Chargement des données de test et d'entrainement
         System.out.println("Chargement global des données d'entraînement...");
         Normalisation_Labellisation.Dataset trainData = Normalisation_Labellisation.chargerPipelineUnique(
                 dossierTrain, activerMelange, activerNormalisation, modeGris, modeTSL, dataAugmentation);
@@ -29,23 +24,25 @@ public class NewtestNeurone {
         System.out.println("Chargement global des données de test...");
         Normalisation_Labellisation.Dataset testData = Normalisation_Labellisation.chargerPipelineUnique(
                 dossierTest, activerMelange, activerNormalisation, modeGris, modeTSL, false);
- 
+            
+                
         if (trainData.X.length == 0 || testData.X.length == 0) {
             System.out.println("Erreur : Aucun dataset chargé. Vérifie tes dossiers.");
             return;
         }
  
-        // La taille s'adapte automatiquement (4096 en Gris, 12288 en RGB/TSL)
+        // Adapte automatiquement la taille (4096 en Gris, 12288 en RGB/TSL)
         final int tailleImage = trainData.X[0].length;
  
-        // =========================================================================
-        // Extension 1 : Choix du type de neurone commun pour les 3 experts
-        // =========================================================================
-        // Neurone.fixeCoefApprentissage(0.1f);   // Coef conseillé pour Heavyside
-        // Neurone.fixeCoefApprentissage(0.001f); // Coef conseillé pour ReLU
-        Neurone.fixeCoefApprentissage(0.001f);    // Coef conseillé pour Sigmoïde
+        
+        //Eta pour les 3 neurones
+
+        // Neurone.fixeCoefApprentissage(0.1f);   //Heavyside
+        // Neurone.fixeCoefApprentissage(0.001f); //ReLU
+        Neurone.fixeCoefApprentissage(0.001f);    //Sigmoïde
  
-        // Décommente la ligne du type de neurone que tu veux tester :
+        //Commenter/Décommenter pour entrainer différent types de neurones
+
         // iNeurone nChat = new NeuroneHeavyside(tailleImage);
         // iNeurone nChien = new NeuroneHeavyside(tailleImage);
         // iNeurone nSauvage = new NeuroneHeavyside(tailleImage);
@@ -59,47 +56,37 @@ public class NewtestNeurone {
         iNeurone nSauvage = new NeuroneSigmoide(tailleImage);
  
  
-        // 2. Lancement de l'apprentissage et du test pour les 3 Experts (Extension 2)
-        System.out.println("\n==================================================");
-        System.out.println(" TEST -> EXPERT CHAT");
-        System.out.println("==================================================");
+        //Apprentissage des 3 experts
+        System.out.println(" TEST -> CHAT");
         final float[] resChat = apprentissageEtTest(nChat, trainData.X, trainData.y_chat, testData.X, testData.y_chat, "chat");
  
-        System.out.println("\n==================================================");
-        System.out.println(" TEST -> EXPERT CHIEN");
-        System.out.println("==================================================");
+        System.out.println(" TEST -> CHIEN");
         final float[] resChien = apprentissageEtTest(nChien, trainData.X, trainData.y_chien, testData.X, testData.y_chien, "chien");
  
-        System.out.println("\n==================================================");
-        System.out.println(" TEST -> EXPERT SAUVAGE");
-        System.out.println("==================================================");
+        System.out.println(" TEST -> SAUVAGE");
         final float[] resSauvage = apprentissageEtTest(nSauvage, trainData.X, trainData.y_sauvage, testData.X, testData.y_sauvage, "sauvage");
  
  
-        // 3. AFFICHAGE DU RÉSUMÉ DES PERFORMANCES INDIVIDUELLES
-        System.out.println("\n\n##################################################");
+        //Performance individuelle
         System.out.println("# RÉSUMÉ DES PERFORMANCES INDIVIDUELLES #");
-        System.out.println("##################################################");
-        System.out.printf(" 1. Expert Chat    -> Succès : %.2f%% | Échec : %.2f%%\n", resChat[0], resChat[1]);
-        System.out.printf(" 2. Expert Chien   -> Succès : %.2f%% | Échec : %.2f%%\n", resChien[0], resChien[1]);
-        System.out.printf(" 3. Expert Sauvage -> Succès : %.2f%% | Échec : %.2f%%\n", resSauvage[0], resSauvage[1]);
-        System.out.println("##################################################");
+        System.out.printf("Chat    -> Succès : %.2f%% | Échec : %.2f%%\n", resChat[0], resChat[1]);
+        System.out.printf("Chien   -> Succès : %.2f%% | Échec : %.2f%%\n", resChien[0], resChien[1]);
+        System.out.printf("Sauvage -> Succès : %.2f%% | Échec : %.2f%%\n", resSauvage[0], resSauvage[1]);
  
-        // 4. EXTENSION 2 & TÂCHE 3.4 : ÉVALUATION MULTI-CLASSE DU SYSTÈME GLOBAL
+        //Evaluation globale
         System.out.println("\n==================================================");
         System.out.println("# ÉVALUATION DU SYSTÈME GLOBAL (CLASSIFICATION)  #");
         System.out.println("==================================================");
         Normalisation_Labellisation.evaluerPerformances(nChat, nChien, nSauvage, testData);
     }
  
-    /**
-     * Méthode d'apprentissage et d'évaluation d'un neurone isolé
-     */
+
     public static float[] apprentissageEtTest(final iNeurone n, final float[][] entrees, final float[] resultats, final float[][] testEntrees, final float[] testResultats, final String nomSauvegarde) {
        
         System.out.println("Apprentissage en cours sur " + entrees.length + " images...");
         n.apprentissage(entrees, resultats, MSElimite);
- 
+        
+        //Sauvegarde de l'entrainement
 //        final String cheminSauvegarde = "poids_" + nomSauvegarde + "_heavyside.txt";
 //        final String cheminSauvegarde = "poids_" + nomSauvegarde + "_relu.txt";
         final String cheminSauvegarde = "poids_" + nomSauvegarde + "_sigmoide.txt";
@@ -129,5 +116,4 @@ public class NewtestNeurone {
  
         return new float[]{pourcentageTest, pourcentageEchec};
     }
-}
 }
